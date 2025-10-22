@@ -1,67 +1,58 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { updateSession } from './lib/supabase/middleware'
-import { getTenantContext } from './lib/tenant'
 
-export async function middleware(request: NextRequest) {
+export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
   const host = request.headers.get('host') || ''
 
-  // Get tenant context
-  const tenantContext = await getTenantContext(host)
-
-  // Handle main domain routes
-  if (tenantContext.isMainDomain) {
-    // Allow access to public routes and API routes
-    if (
-      pathname.startsWith('/api') ||
-      pathname.startsWith('/_next') ||
-      pathname.startsWith('/favicon.ico') ||
-      pathname === '/' ||
-      pathname.startsWith('/register') ||
-      pathname.startsWith('/admin') ||
-      pathname.startsWith('/tenant-not-found')
-    ) {
-      return NextResponse.next()
+  // Simple subdomain detection
+  const isLocalhost = host.includes('localhost') || host.includes('127.0.0.1')
+  const isVercelDomain = host.includes('.vercel.app')
+  
+  // Extract subdomain
+  let subdomain = null
+  if (!isLocalhost && !isVercelDomain) {
+    const parts = host.split('.')
+    if (parts.length >= 3) {
+      subdomain = parts[0]
     }
-
-    // Redirect other routes to home
-    return NextResponse.redirect(new URL('/', request.url))
+  } else if (isLocalhost) {
+    const parts = host.split('.')
+    if (parts.length >= 2 && parts[1] === 'localhost') {
+      subdomain = parts[0]
+    }
   }
 
   // Handle subdomain routes
-  if (tenantContext.subdomain) {
-    if (!tenantContext.tenant) {
-      // Subdomain exists but tenant not found
-      return NextResponse.redirect(new URL('/tenant-not-found', request.url))
-    }
-    
+  if (subdomain && subdomain !== 'www') {
     // Redirect subdomain root to tenant page
     if (pathname === '/') {
       return NextResponse.redirect(new URL('/tenant', request.url))
     }
-  }
-
-  // Set tenant context in headers for API routes
-  if (pathname.startsWith('/api')) {
-    const response = NextResponse.next()
-    if (tenantContext.tenant) {
-      response.headers.set('x-tenant-id', tenantContext.tenant.id)
-      response.headers.set('x-tenant-subdomain', tenantContext.tenant.subdomain)
+    
+    // Allow tenant routes
+    if (pathname.startsWith('/tenant') || pathname.startsWith('/api')) {
+      return NextResponse.next()
     }
-    return response
+    
+    // Redirect other subdomain routes to tenant page
+    return NextResponse.redirect(new URL('/tenant', request.url))
   }
 
-  // For tenant-specific routes, add tenant info to headers
-  const response = NextResponse.next()
-  if (tenantContext.tenant) {
-    response.headers.set('x-tenant-id', tenantContext.tenant.id)
-    response.headers.set('x-tenant-subdomain', tenantContext.tenant.subdomain)
-    response.headers.set('x-tenant-name', tenantContext.tenant.name)
-    response.headers.set('x-tenant-color', tenantContext.tenant.primary_color || '#3b82f6')
+  // Handle main domain routes
+  if (
+    pathname.startsWith('/api') ||
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/favicon.ico') ||
+    pathname === '/' ||
+    pathname.startsWith('/register') ||
+    pathname.startsWith('/admin') ||
+    pathname.startsWith('/tenant-not-found')
+  ) {
+    return NextResponse.next()
   }
 
-  // Update Supabase session
-  return updateSession(request)
+  // Redirect other routes to home
+  return NextResponse.redirect(new URL('/', request.url))
 }
 
 export const config = {

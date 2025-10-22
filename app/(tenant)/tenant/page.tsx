@@ -1,38 +1,28 @@
 import { headers } from 'next/headers'
-import { getTenantContext } from '@/lib/tenant'
-import { createClient } from '@/lib/supabase/server'
 import ProductCard from '@/components/product-card'
 import TenantHeader from '@/components/tenant-header'
 
 export default async function TenantHomePage() {
   const headersList = await headers()
   const host = headersList.get('host') || ''
-  const tenantContext = await getTenantContext(host)
-
-  // This should not happen due to middleware, but just in case
-  if (!tenantContext.tenant) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
-            Tenant Not Found
-          </h1>
-          <p className="text-gray-600">
-            The subdomain you're looking for doesn't exist.
-          </p>
-          <a 
-            href="/" 
-            className="mt-4 inline-block bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-          >
-            Go to Main Site
-          </a>
-        </div>
-      </div>
-    )
+  
+  // Extract subdomain from host
+  let subdomain = 'demo' // default
+  if (host.includes('localhost')) {
+    const parts = host.split('.')
+    if (parts.length >= 2 && parts[1] === 'localhost') {
+      subdomain = parts[0]
+    }
+  } else if (!host.includes('.vercel.app')) {
+    const parts = host.split('.')
+    if (parts.length >= 3) {
+      subdomain = parts[0]
+    }
   }
 
   // Simplified for now - will implement proper data fetching later
   const products: any[] = []
+  const tenantName = subdomain.charAt(0).toUpperCase() + subdomain.slice(1) + ' Company'
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -42,7 +32,7 @@ export default async function TenantHomePage() {
         {/* Hero Section */}
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            Welcome to {tenantContext.tenant.name}
+            Welcome to {tenantName}
           </h1>
           <p className="text-xl text-gray-600 max-w-2xl mx-auto">
             Discover our amazing products and services designed just for you.
